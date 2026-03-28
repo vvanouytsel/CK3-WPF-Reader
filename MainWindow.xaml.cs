@@ -201,33 +201,57 @@ namespace CK3_Reader
         {
             if (msg == WM_CLIPBOARDUPDATE)
             {
-                if (Clipboard.ContainsText())
+                try
                 {
+                    string clipboardText = null;
 
-                    string activeTitle = GetActiveWindowTitle();
-                    if ( clipAll == true || ( activeTitle == "Crusader Kings III" || activeTitle == "Europa Universalis V") )
+                    // Retry in case another process holds the clipboard open
+                    for (int attempt = 0; attempt < 10; attempt++)
                     {
-                        StopSpeech();
-
-                        string clipboardText = Clipboard.GetText();
-                        eventText = clipboardText;
-                        eventText += "\n";
-
-                        foreach (var format in formatting)
+                        try
                         {
-                            eventText = Regex.Replace(eventText, format, " ");
+                            if (Clipboard.ContainsText())
+                                clipboardText = Clipboard.GetText();
+                            break;
                         }
-
-                        // Update the UI
-                        Dispatcher.Invoke(() =>
+                        catch (System.Runtime.InteropServices.ExternalException)
                         {
-                            txtLastLine.Text = "Copied from clipbard";
-                            txtEvent.Text = eventText;
-                        });
-                        _speechExample.Synthesizer.SpeakAsync(eventText);
+                            Thread.Sleep(10);
+                        }
                     }
 
+                    if (clipboardText != null)
+                    {
+                        string activeTitle = GetActiveWindowTitle();
+                        if (clipAll == true || (activeTitle == "Crusader Kings III" || activeTitle == "Europa Universalis V"))
+                        {
+                            StopSpeech();
+
+                            eventText = clipboardText + "\n";
+
+                            foreach (var format in formatting)
+                            {
+                                eventText = Regex.Replace(eventText, format, " ");
+                            }
+
+                            // Update the UI
+                            Dispatcher.Invoke(() =>
+                            {
+                                txtLastLine.Text = "Copied from clipboard";
+                                txtEvent.Text = eventText;
+                            });
+                            _speechExample.Synthesizer.SpeakAsync(eventText);
+                        }
+                    }
                 }
+                catch (Exception ex)
+                {
+                    Dispatcher.Invoke(() =>
+                    {
+                        txtLastLine.Text = "Clipboard error: " + ex.Message;
+                    });
+                }
+
                 handled = true;
             }
             return IntPtr.Zero;
